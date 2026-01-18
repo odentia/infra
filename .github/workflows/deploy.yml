@@ -31,13 +31,16 @@ jobs:
         RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
         EOF
         
+        # Настройки SSH для CI/CD (отключаем проверку host key)
+        SSH_OPTS="-i key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        
         # Создаем директорию на сервере если её нет
-        ssh -i key.pem $USER@$HOST "mkdir -p ~/infra"
+        ssh $SSH_OPTS $USER@$HOST "mkdir -p ~/infra"
         
         # Копируем файлы на сервер
-        scp -i key.pem docker-compose.yml .env $USER@$HOST:~/infra/
+        scp $SSH_OPTS docker-compose.yml .env $USER@$HOST:~/infra/
         
-        ssh -i key.pem $USER@$HOST "
+        ssh $SSH_OPTS $USER@$HOST "
           cd ~/infra
           
           # Останавливаем и удаляем старый контейнер если существует
