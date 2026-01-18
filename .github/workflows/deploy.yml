@@ -1,0 +1,54 @@
+name: Deploy RabbitMQ
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Deploy to server
+      env:
+        SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        HOST: ${{ secrets.DEPLOY_HOST }}
+        USER: ${{ secrets.DEPLOY_USER }}
+        RABBITMQ_USER: ${{ secrets.RABBITMQ_USER }}
+        RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+        RABBITMQ_VHOST: ${{ secrets.RABBITMQ_VHOST }}
+      run: |
+        echo "$SSH_KEY" > key.pem
+        chmod 600 key.pem
+        
+        # Создаем .env файл из секретов (RABBITMQ_VHOST опциональный, по умолчанию /)
+        cat > .env << EOF
+        RABBITMQ_USER=$RABBITMQ_USER
+        RABBITMQ_PASSWORD=$RABBITMQ_PASSWORD
+        RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
+        EOF
+        
+        # Создаем директорию на сервере если её нет
+        ssh -i key.pem $USER@$HOST "mkdir -p ~/infra"
+        
+        # Копируем файлы на сервер
+        scp -i key.pem docker-compose.yml .env $USER@$HOST:~/infra/
+        
+        ssh -i key.pem $USER@$HOST "
+          cd ~/infra
+          
+          # Останавливаем и удаляем старый контейнер если существует
+          docker-compose down || true
+          
+          # Запускаем RabbitMQ
+          docker-compose up -d
+          
+          # Проверяем статус
+          docker-compose ps
+        "
+        
+        # Очищаем ключ и .env
+        rm -f key.pem .env
